@@ -25,7 +25,7 @@ from app.crm import (
     SlotNotOffered,
     SlotTaken,
 )
-from app.dias import dia_pedido, nombra_un_dia
+from app.dias import dia_pedido, dias_nombrados, nombra_un_dia
 from app.profile import BusinessProfile
 from app.state import AppContext, Conversation, OfferedSlot
 
@@ -568,14 +568,29 @@ class ToolRuntime:
                 fecha,
             )
             fecha_ignorada, fecha = fecha, None
-        # M-02 (fork): si el lead nombró un día y el modelo no mandó `fecha`,
-        # la calculamos aquí. Sin esto vuelve el reparto (empieza hoy) y el
-        # modelo reetiqueta esos horarios con el día que el lead pidió.
-        if fecha is None and self._conversacion_reciente:
-            inferida = dia_pedido(
-                self._conversacion_reciente, datetime.now(self._tz).date()
-            )
-            if inferida is not None:
+        # M-02 (fork): el modelo no siempre acierta el dia — lo omite o manda
+        # otro. Aqui se contrasta con los dias que el lead nombro: si la fecha
+        # del modelo no cae en ninguno, se corrige; si no vino, se calcula.
+        if self._conversacion_reciente:
+            hoy_dia = datetime.now(self._tz).date()
+            nombrados = dias_nombrados(self._conversacion_reciente)
+            inferida = dia_pedido(self._conversacion_reciente, hoy_dia)
+            if fecha is not None and nombrados:
+                try:
+                    dia_modelo = date.fromisoformat(fecha).weekday()
+                except ValueError:
+                    dia_modelo = None
+                if dia_modelo is not None and dia_modelo not in nombrados:
+                    if inferida is not None:
+                        logger.info(
+                            "tools: fecha %s no corresponde a un dia que el lead "
+                            "nombró; consulto %s",
+                            fecha,
+                            inferida,
+                        )
+                        fecha = inferida.isoformat()
+                        fecha_ignorada = None
+            elif fecha is None and inferida is not None:
                 logger.info("tools: fecha inferida del texto del lead -> %s", inferida)
                 fecha = inferida.isoformat()
                 fecha_ignorada = None

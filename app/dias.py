@@ -99,3 +99,8 @@ def dia_pedido(texto: str, hoy: date) -> date | None:
     objetivo = _DIAS_SEMANA[m.group(1)]
     # El mismo día de hoy cuenta como hoy: el CRM dirá si aún queda hora.
     return hoy + timedelta(days=(objetivo - hoy.weekday()) % 7)
+
+def dias_nombrados(texto: str) -> set[int]:
+    """Los días de la semana (0=lunes) que se nombran en el texto."""
+    plano = _plano(texto)
+    return {_DIAS_SEMANA[m.group(1)] for m in _DIA_NOMBRADO.finditer(plano)}
