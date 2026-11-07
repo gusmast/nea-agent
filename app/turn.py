@@ -446,7 +446,12 @@ async def run_turn(
         str(crm_conv_id),
         profile=profile,
         tz=tz,
-        conversacion_reciente=_conversacion_reciente(history),
+        # M-02 (fork): la ventana incluye los mensajes del lead de ESTE turno.
+        # En el primer mensaje de una conversación nueva (o recién reseteada)
+        # `history` está vacío, y sin esto el detector de días no veía el
+        # «martes» que el lead acababa de escribir.
+        conversacion_reciente=_reciente_con_este_turno(history, del_lead),
+
         etapas=etapas_siguientes(context),
     )
     try:
@@ -834,3 +839,16 @@ def _conversacion_reciente(history: list[BotMessage]) -> str:
     del_lead = [m.content for m in history if m.role == "user"][-3:]
     de_nea = [m.content for m in history if m.role == "assistant"][-1:]
     return "\n".join(str(t) for t in de_nea + del_lead)
+
+def _reciente_con_este_turno(
+    history: list[BotMessage], del_lead: list[str]
+) -> str:
+    """Lo de app/dias.py, sumando lo que el lead escribió en este turno.
+
+    `_conversacion_reciente` mira el historial persistido; en el primer mensaje
+    de una conversación no hay historial, así que el día que el lead nombra
+    justo ahí se perdía.
+    """
+    base = _conversacion_reciente(history)
+    de_este_turno = "\n".join(str(t) for t in del_lead[-3:])
+    return "\n".join(t for t in (base, de_este_turno) if t)
