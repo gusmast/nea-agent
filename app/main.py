@@ -292,6 +292,31 @@ def create_app(ctx: AppContext | None = None) -> FastAPI:
     app.include_router(ensayo_router)
     app.include_router(webhook_retirado_router)
 
+    @app.get("/debug/m02")
+    async def debug_m02(request: Request):  # type: ignore[no-untyped-def]
+        # SONDA TEMPORAL del fork M-02: confirma que el parche está vivo y
+        # qué fecha calcula para una frase dada. Se quita al cerrar el caso.
+        from datetime import date as _date
+
+        from app.dias import dia_pedido, dias_nombrados
+
+        c: AppContext | None = request.app.state.ctx
+        llave = (c.settings.crm_bot_api_key if c else "") or ""
+        if not llave or request.headers.get("x-debug-key") != llave:
+            return JSONResponse({"error": "no"}, status_code=404)
+        texto = request.query_params.get("texto", "el martes tiene disponible?")
+        hoy = _date(2026, 11, 7)
+        d = dia_pedido(texto, hoy)
+        return JSONResponse(
+            {
+                "marker": "M-02b",
+                "texto": texto,
+                "dias_nombrados": sorted(dias_nombrados(texto)),
+                "dia_calculado": d.isoformat() if d else None,
+            }
+        )
+
+
     @app.get("/health")
     async def health(request: Request):  # type: ignore[no-untyped-def]
         # El código HTTP lo decide SOLO la base: es lo que mira el HEALTHCHECK
