@@ -292,6 +292,17 @@ def create_app(ctx: AppContext | None = None) -> FastAPI:
     app.include_router(ensayo_router)
     app.include_router(webhook_retirado_router)
 
+
+    @app.get("/debug/m02/trace")
+    async def debug_m02_trace(request: Request):  # type: ignore[no-untyped-def]
+        from app.tools import M02_TRACE
+
+        c: AppContext | None = request.app.state.ctx
+        llave = getattr(c.settings, "crm_bot_api_key", "") if c else ""
+        if not llave or request.headers.get("x-debug-key") != llave:
+            return JSONResponse({"error": "no"}, status_code=404)
+        return JSONResponse({"traza": M02_TRACE[-30:]})
+
     @app.get("/debug/m02")
     async def debug_m02(request: Request):  # type: ignore[no-untyped-def]
         # SONDA TEMPORAL del fork M-02: confirma que el parche está vivo y

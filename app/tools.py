@@ -44,6 +44,18 @@ MAX_OFFERED_DIA = 24
 OFFER_PER_DAY = 3
 OFFER_DAYS = 5
 
+# M-02 (fork): traza de las consultas de disponibilidad, en memoria. La lee
+# /debug/m02/trace para diagnosticar sin acceso a los logs del contenedor.
+from datetime import datetime as _dt
+
+M02_TRACE: list[dict[str, Any]] = []
+
+
+def _m02_anotar(**kw: Any) -> None:
+    M02_TRACE.append({"at": _dt.now().isoformat(), **kw})
+    del M02_TRACE[:-40]
+
+
 TOOL_SCHEMAS: list[dict[str, Any]] = [
     {
         "type": "function",
@@ -549,6 +561,11 @@ class ToolRuntime:
 
     async def _propose_slots(self, args: dict[str, Any]) -> dict[str, Any]:
         fecha = _fecha_pedida(args.get("fecha"))
+        _m02_anotar(
+            tipo="propose_slots",
+            fecha_arg=args.get("fecha"),
+            reciente=(self._conversacion_reciente or "")[:160],
+        )
         if args.get("fecha") and fecha is None:
             return {
                 "ok": False,
@@ -607,6 +624,12 @@ class ToolRuntime:
         except AgendaUnavailable:
             return self._sin_agenda()
         query = consulta.get("query") if isinstance(consulta.get("query"), dict) else None
+        _m02_anotar(
+            tipo="resultado",
+            fecha_usada=fecha,
+            slots=[(s.get("dayIso"), s.get("time")) for s in consulta["slots"][:6]],
+            cobertura=query,
+        )
         if fecha:
             return await self._huecos_del_dia(fecha, consulta["slots"], query)
 
