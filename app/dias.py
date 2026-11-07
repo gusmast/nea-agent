@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from datetime import date, timedelta
 
 _DIAS = r"lunes|martes|miercoles|jueves|viernes|sabado|domingo"
 _MESES = (
@@ -52,3 +53,49 @@ def _plano(texto: str) -> str:
 def nombra_un_dia(texto: str) -> bool:
     plano = _plano(texto)
     return bool(_NOMBRA_UN_DIA.search(plano) or _MANANA_DIA.search(plano))
+
+# --- M-02 (fork): calcular el día que el lead nombró -------------------------
+#
+# El prompt le pide al modelo que consulte con `fecha` cuando el lead nombra un
+# día, y el modelo no siempre lo hace: consulta el reparto, recibe horarios que
+# empiezan hoy y los reetiqueta con el día que el lead pidió. El lead ve
+# «martes» con horarios del lunes.
+#
+# Aquí la fecha se calcula en código, con la de hoy del negocio, para que la
+# consulta sea la correcta aunque el modelo olvide el argumento.
+
+_DIAS_SEMANA = {
+    "lunes": 0,
+    "martes": 1,
+    "miercoles": 2,
+    "jueves": 3,
+    "viernes": 4,
+    "sabado": 5,
+    "domingo": 6,
+}
+
+_DIA_NOMBRADO = re.compile(r"\b(lunes|martes|miercoles|jueves|viernes|sabado|domingo)\b")
+_PASADO_MANANA = re.compile(r"\bpasado manana\b")
+_MANANA = re.compile(r"(?<!\bla )(?<!\blas )\bmanana\b")
+_HOY = re.compile(r"\bhoy\b")
+
+
+def dia_pedido(texto: str, hoy: date) -> date | None:
+    """La fecha del PRIMER día que se nombra en el texto, o None.
+
+    Se toma el primero a propósito: en «el martes, no el lunes» el día que
+    importa es el martes, y quedarse con el último daría el lunes.
+    """
+    plano = _plano(texto)
+    if _PASADO_MANANA.search(plano):
+        return hoy + timedelta(days=2)
+    if _HOY.search(plano):
+        return hoy
+    if _MANANA.search(plano):
+        return hoy + timedelta(days=1)
+    m = _DIA_NOMBRADO.search(plano)
+    if not m:
+        return None
+    objetivo = _DIAS_SEMANA[m.group(1)]
+    # El mismo día de hoy cuenta como hoy: el CRM dirá si aún queda hora.
+    return hoy + timedelta(days=(objetivo - hoy.weekday()) % 7)

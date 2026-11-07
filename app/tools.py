@@ -25,7 +25,7 @@ from app.crm import (
     SlotNotOffered,
     SlotTaken,
 )
-from app.dias import nombra_un_dia
+from app.dias import dia_pedido, nombra_un_dia
 from app.profile import BusinessProfile
 from app.state import AppContext, Conversation, OfferedSlot
 
@@ -568,6 +568,17 @@ class ToolRuntime:
                 fecha,
             )
             fecha_ignorada, fecha = fecha, None
+        # M-02 (fork): si el lead nombró un día y el modelo no mandó `fecha`,
+        # la calculamos aquí. Sin esto vuelve el reparto (empieza hoy) y el
+        # modelo reetiqueta esos horarios con el día que el lead pidió.
+        if fecha is None and self._conversacion_reciente:
+            inferida = dia_pedido(
+                self._conversacion_reciente, datetime.now(self._tz).date()
+            )
+            if inferida is not None:
+                logger.info("tools: fecha inferida del texto del lead -> %s", inferida)
+                fecha = inferida.isoformat()
+                fecha_ignorada = None
         # La conversación va SIEMPRE: es contra ella que el CRM registra la
         # oferta, y sin ella no hay nada reservable después.
         try:
