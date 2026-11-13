@@ -33,6 +33,9 @@ class FollowupWorker:
         self._ctx = ctx
 
     async def run(self) -> None:
+        if self._ctx.settings.followup_hours <= 0:
+            logger.info("followup worker desactivado (followup_hours <= 0)")
+            return
         while True:
             await asyncio.sleep(self.INTERVAL)
             try:
@@ -41,7 +44,7 @@ class FollowupWorker:
                 logger.exception("followup: fallo en el barrido")
 
     async def tick(self, now: datetime | None = None) -> None:
-        if self._ctx.settings.cloud_mode:
+        if self._ctx.settings.cloud_mode or self._ctx.settings.followup_hours <= 0:
             return  # Cloud coordination is opt-in and durable in the CRM, never a second sender.
         now = now or utcnow()
         for conv in await self._ctx.store.due_followups(now):
